@@ -83,6 +83,11 @@ struct X {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct All {
+    all: Vec<Person>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct Person {
     uid: Option<String>,
     name: Option<String>,
@@ -177,17 +182,11 @@ impl Person {
             .query_with_vars(query, vars)
             .await
             .expect("resp");
-        let ppl: All = resp.try_into().expect("JSON");
+        let ppl: All = serde_json::from_slice::<All>(&resp.json).expect("Failed to deserialize binary data");
         println!("{:#?}", ppl);
         let mut person = ppl.all.first().unwrap().to_owned();
-         (&mut person);
         return create_data(client, person).await;
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct All {
-    all: Vec<Person>
 }
 
 trait HasUid {
