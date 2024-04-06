@@ -9,6 +9,7 @@ extern crate qstring;
 use qstring::QString;
 use serde::{Deserialize, Serialize};
 
+/// Drops all data in the dgraph database and wipes the schema
 async fn drop_all(client: &Client) {
     let op = Operation {
         drop_all: true,
@@ -17,15 +18,11 @@ async fn drop_all(client: &Client) {
     client.alter(op).await.expect("dropped all");
 }
 
+/// Sets the schema for this application
 async fn set_schema(client: &Client) {
     let schema = r#"
         name: string @index(exact) .
         age: int .
-        married: bool .
-        loc: geo .
-        dob: datetime .
-        friend: [uid] @reverse .
-        associates: [uid] @reverse .
     "#
     .into();
     let op = Operation {
@@ -46,19 +43,6 @@ struct Location {
 struct Friend {
     uid: String,
     name: String,
-}
-
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct Associates {
-    uid: String,
-    name: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct Parasocial {
-    uid: String,
-    name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -334,11 +318,14 @@ async fn friendws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse
     resp
 }
 
+/// The index of the website
 async fn index(_req: HttpRequest) -> impl Responder {
     HttpResponse::Ok()
         .insert_header(("Content-Type", "text/plain"))
         .body("This is the backend for the website")
 }
+
+/// Endpoint for getting a name's uid
 async fn getuid(req: HttpRequest) -> impl Responder {
     let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
     let qs = QString::from(req.query_string());
@@ -367,6 +354,7 @@ async fn getuid(req: HttpRequest) -> impl Responder {
         .body(ppl.all.first().unwrap().uid.clone().unwrap())
 }
 
+/// Endpoint for adding a user
 async fn adduser(json_data: web::Json<Person>) -> impl Responder {
     let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
     println!("Received data: {:?}", json_data);
@@ -383,6 +371,7 @@ async fn adduser(json_data: web::Json<Person>) -> impl Responder {
         .body(uid)
 }
 
+/// Endpoint for searching for a user or getting all users
 async fn getusers(req: HttpRequest) -> impl Responder {
     let query = r#"
         query all($a: string) {
