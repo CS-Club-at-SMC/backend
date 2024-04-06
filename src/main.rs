@@ -204,15 +204,6 @@ impl HasUid for Person {
     }
 }
 
-impl HasUid for Parasocial {
-    fn get_uid(&self) -> String {
-        self.uid.clone()
-    }
-    fn get_name(&self) -> String {
-        self.name.as_ref().unwrap().to_lowercase().to_string()
-    }
-}
-
 async fn create_data<T>(client: &Client, data: T) -> String
 where
     T: serde::Serialize + std::fmt::Debug + HasUid,
