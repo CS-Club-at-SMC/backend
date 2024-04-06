@@ -1,8 +1,7 @@
-use std::{collections::HashMap, env::vars};
+use std::collections::HashMap;
 use actix::{Actor, StreamHandler};
 use actix_web::{web, HttpRequest, Responder, HttpResponse, HttpServer, App, middleware::{DefaultHeaders, Compress}};
 use actix_web_actors::ws;
-use chrono::prelude::*;
 use dgraph_tonic::{Client, Mutate, Mutation, Operation, Query};
 use maplit::hashmap;
 extern crate qstring;
