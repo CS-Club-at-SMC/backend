@@ -1,0 +1,21 @@
+[package]
+name = "simple"
+version = "0.1.0"
+authors = ["Selmeci <selmeci.roman@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix = "0.13.3"
+actix-web = { version = "4", default-features = false, features =  ["macros", "compress-brotli", "compress-gzip", "cookies", "http2"] }
+actix-web-actors = "4"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+dgraph-tonic = "0.11"
+maplit = "1"
+qstring = "0.7.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
