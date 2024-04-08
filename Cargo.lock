@@ -559,19 +559,17 @@ dependencies = [
 
 [[package]]
 name = "cs-backend"
-version = "0.0.2"
+version = "0.1.0"
 dependencies = [
  "actix",
  "actix-web",
  "actix-web-actors",
- "async-trait",
  "dgraph-tonic",
  "maplit",
  "qstring",
  "serde",
  "serde_derive",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
