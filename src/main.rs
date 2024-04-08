@@ -125,7 +125,7 @@ impl Person {
     }
     async fn new_node(client: &Client, name: String) -> String {
         let p = Person {
-            uid: format!("_:{}", name.to_ascii_lowercase()).into(),
+            uid: format!("_:{}", name).into(),
             name: Some(name),
             email: None,
             discord: None,
@@ -198,7 +198,7 @@ impl HasUid for Person {
         <std::option::Option<std::string::String> as Clone>::clone(&self.uid).unwrap()
     }
     fn get_name(&self) -> String {
-        self.name.as_ref().unwrap().to_lowercase().to_string()
+        self.name.as_ref().unwrap().to_string()
     }
 }
 
@@ -206,7 +206,7 @@ async fn create_data<T>(client: &Client, data: T) -> String
 where
     T: serde::Serialize + std::fmt::Debug + HasUid,
 {
-    let uid = data.get_name();
+    let name = data.get_name();
     let mut txn = client.new_mutated_txn();
     let mut mu = Mutation::new();
     mu.set_set_json(&data).expect("JSON");
@@ -214,10 +214,10 @@ where
     txn.commit().await.expect("committed");
     
 
-    println!("{:#?}, {}", response.uids, uid);
+    println!("{:#?}, {}", response.uids, name);
     let id = response
         .uids
-        .get(uid.as_str())
+        .get(name.as_str())
         .to_owned();
     if id.is_some() {
         return id.unwrap().to_string();
@@ -237,7 +237,6 @@ struct Node {
     uid: String,
     name: String,
 }
-
 
 async fn query_nodes(client: &Client) -> HashMap<String, String> {
     let query = r#"
@@ -442,9 +441,9 @@ async fn getusers(req: HttpRequest) -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
-    let mut uid_map = query_nodes(&client).await;
     drop_all(&client).await;
     set_schema(&client).await;
+    let mut uid_map = query_nodes(&client).await;
     let x = Person::new_node(&client, "Joshua".to_owned()).await;
     uid_map.insert("Joshua".to_string(), x);
     let x = Person::new_node(&client, "Pronsh".to_owned()).await;
