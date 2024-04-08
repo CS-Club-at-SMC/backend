@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 use actix::{Actor, StreamHandler};
 use actix_web::{web, HttpRequest, Responder, HttpResponse, HttpServer, App, middleware::{DefaultHeaders, Compress}};
 use actix_web_actors::ws;
@@ -313,6 +313,111 @@ async fn index(_req: HttpRequest) -> impl Responder {
         .body("This is the backend for the website")
 }
 
+/// Endpoint for updating a user's details
+async fn updateuser(req: HttpRequest) -> impl Responder {
+    let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
+    let qs = QString::from(req.query_string());
+    let uid = qs.get("uid");
+    if uid.is_none() {
+        return HttpResponse::BadRequest().body("uid cannot be empty");
+    }
+    let query = r#"
+        query all($a: string) {
+            all(func: uid($a)) {
+                uid
+                name
+                email
+                discord {
+                    uid
+                    handle
+                    display_name
+                    user_id
+                }
+                instagram {
+                    handle
+                    display_name
+                    user_id
+                }
+                snapchat
+                school {
+                    name
+                    schooltype
+                }
+                misc
+            }
+        }
+    "#;
+    let vars = hashmap! { "$a" => uid.unwrap().to_owned() };
+    let resp = client
+        .new_read_only_txn()
+        .query_with_vars(query, vars)
+        .await
+        .expect("resp");
+    let ppl: All = serde_json::from_slice::<All>(&resp.json).expect("Failed to deserialize binary data");
+    if ppl.all.first().is_none() {
+        return HttpResponse::NotFound().body("Error: User not found");
+    }
+    let mut person = ppl.all.first().unwrap().to_owned();
+    drop(ppl);
+    match qs.get("discord-uid") {
+        Some(v) => person.discord.as_mut().unwrap().uid = v.to_owned(),
+        _ => {},
+    }
+    match qs.get("discord-handle") {
+        Some(v) => person.discord.as_mut().unwrap().handle = Some(v.to_owned()),
+        _ => {},
+    }
+    match qs.get("discord-display_name") {
+        Some(v) => person.discord.as_mut().unwrap().display_name = Some(v.to_owned()),
+        _ => {},
+    }
+    match qs.get("discord-user_id") {
+        Some(v) => person.discord.as_mut().unwrap().user_id = v.to_owned().parse::<u64>().unwrap(),
+        _ => {},
+    }
+    match qs.get("instagram-handle") {
+        Some(v) => person.instagram.as_mut().unwrap().handle = Some(v.to_owned()),
+        _ => {},
+    }
+    match qs.get("instagram-display_name") {
+        Some(v) => person.instagram.as_mut().unwrap().display_name = Some(v.to_owned()),
+        _ => {},
+    }
+    match qs.get("instagram-user_id") {
+        Some(v) => person.instagram.as_mut().unwrap().user_id = v.to_owned().parse::<u64>().unwrap(),
+        _ => {},
+    }
+    match qs.get("x-handle") {
+        Some(v) => person.x.as_mut().unwrap().handle = Some(v.to_owned()),
+        _ => {},
+    }
+    match qs.get("x-display_name") {
+        Some(v) => person.x.as_mut().unwrap().display_name = Some(v.to_owned()),
+        _ => {},
+    }
+    match qs.get("x-user_id") {
+        Some(v) => person.x.as_mut().unwrap().user_id = v.to_owned().parse::<u64>().unwrap(),
+        _ => {},
+    }
+    match qs.get("school") {
+        Some(v) => person.school = vec![School {name: v.to_string(), schooltype: SchoolType::College}].into(),
+        _ => {},
+    };
+    match qs.get("name") {
+        Some(v) => person.name = Some(v.to_owned()),
+        _ => {},
+    };
+    match qs.get("email") {
+        Some(v) => person.email = Some(v.to_owned()),
+        _ => {},
+    };
+    println!("e");
+    create_data(&client, person.clone()).await;
+    HttpResponse::Ok()
+        .insert_header(("Content-Type", "text/plain"))
+        .body(serde_json::to_string(&person).expect("Failed to serialize to JSON string"))
+}
+
 /// Endpoint for getting a name's uid
 async fn getuid(req: HttpRequest) -> impl Responder {
     let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
@@ -461,6 +566,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index))
             .route("/getusers", web::get().to(getusers))
             .route("/adduser", web::post().to(adduser))
+            .route("/updateuser", web::get().to(updateuser))
             .route("/getuid", web::get().to(getuid))
             .route("/friendws", web::get().to(friendws))
     })
