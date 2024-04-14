@@ -1,6 +1,6 @@
 use std::{collections::HashMap, vec};
 use actix::{Actor, StreamHandler};
-use actix_web::{web, HttpRequest, Responder, HttpResponse, HttpServer, App, middleware::{DefaultHeaders, Compress}};
+use actix_web::{middleware::{Compress, DefaultHeaders}, web::{self}, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web_actors::ws;
 use dgraph_tonic::{Client, Mutate, Mutation, Operation, Query};
 use maplit::hashmap;
@@ -41,7 +41,7 @@ struct Location {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct Friend {
     uid: String,
-    name: String,
+    //name: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -96,6 +96,7 @@ struct Person {
     snapchat: Option<String>,
     x: Option<X>,
     school: Option<Vec<School>>,
+    friends: Option<Vec<Friend>>,
     misc: Option<Vec<String>>,
 }
 
@@ -109,6 +110,7 @@ impl Person {
         snapchat: Option<String>,
         x: Option<X>,
         school: Option<Vec<School>>,
+        friends: Option<Vec<Friend>>,
         misc: Option<Vec<String>>,
     ) -> Self {
         Person {
@@ -120,6 +122,7 @@ impl Person {
             snapchat,
             x,
             school,
+            friends,
             misc,
         }
     }
@@ -133,6 +136,7 @@ impl Person {
             snapchat: None,
             x: None,
             school: None,
+            friends: None,
             misc: None,
         };
         if let Ok(json_string) = serde_json::to_string(&p) {
@@ -142,10 +146,10 @@ impl Person {
         }
         return create_data(client, p).await;
     }
-    async fn update_person<F>(client: &Client, name: String, updater: F) -> String where F: FnOnce(&mut Person), {
+    async fn update_person<F>(client: &Client, uid: String, updater: F) -> String where F: FnOnce(&mut Person), {
         let query = r#"
             query all($a: string) {
-                all(func: eq(name, $a)) {
+                all(func: uid($a)) {
                     uid
                     name
                     email
@@ -170,12 +174,15 @@ impl Person {
                         name
                         schooltype
                     }
+                    friends {
+                        uid
+                    }
                     misc
                 }
             }
         "#;
-        let vars = hashmap! {"$a" => name.clone()};
-        println!("{}", name);
+        let vars = hashmap! {"$a" => uid.clone()};
+        println!("{}", uid);
         let resp = client
             .new_read_only_txn()
             .query_with_vars(query, vars)
@@ -185,6 +192,16 @@ impl Person {
         println!("{:#?}", ppl);
         let mut person = ppl.all.first().unwrap().to_owned();
         return create_data(client, person).await;
+    }
+    async fn add_friend(client: &Client, uid: String, friend_uid: String) -> String {
+        return Person::update_person(&client, uid, |person| {
+            if let Some(friends) = person.friends.as_mut() {
+                friends.push(Friend { uid: friend_uid });
+            } else {
+                person.friends = vec![Friend { uid: friend_uid }].into();
+            }
+            println!("{:#?}", person)
+        }).await;
     }
 }
 
@@ -313,6 +330,23 @@ async fn index(_req: HttpRequest) -> impl Responder {
         .body("This is the backend for the website")
 }
 
+/// Endpoint for adding friends to users
+async fn addfriend(req: HttpRequest) -> impl Responder {
+    let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
+    let qs = QString::from(req.query_string());
+    let uid = qs.get("uid");
+    let friend = qs.get("friend");
+    if uid.is_none() {
+        return HttpResponse::BadRequest().body("uid cannot be empty");
+    } else if friend.is_none() {
+        return HttpResponse::BadRequest().body("friend cannot be empty");
+    }
+    let update = Person::add_friend(&client, uid.unwrap().to_string(), friend.unwrap().to_string()).await;
+    HttpResponse::Ok()
+        .insert_header(("Content-Type", "text/plain"))
+        .body(update)
+}
+
 /// Endpoint for updating a user's details
 async fn updateuser(req: HttpRequest) -> impl Responder {
     let client = Client::new(vec!["http://localhost:9080"]).expect("connected client");
@@ -342,6 +376,9 @@ async fn updateuser(req: HttpRequest) -> impl Responder {
                 school {
                     name
                     schooltype
+                }
+                friends {
+                    uid
                 }
                 misc
             }
@@ -411,7 +448,6 @@ async fn updateuser(req: HttpRequest) -> impl Responder {
         Some(v) => person.email = Some(v.to_owned()),
         _ => {},
     };
-    println!("e");
     create_data(&client, person.clone()).await;
     HttpResponse::Ok()
         .insert_header(("Content-Type", "text/plain"))
@@ -488,6 +524,9 @@ async fn getusers(req: HttpRequest) -> impl Responder {
                     name
                     schooltype
                 }
+                friends {
+                    uid
+                }
                 misc
             }
         }
@@ -513,6 +552,9 @@ async fn getusers(req: HttpRequest) -> impl Responder {
             school {
                 name
                 schooltype
+            }
+            friends {
+                uid
             }
             misc
             }
@@ -566,6 +608,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index))
             .route("/getusers", web::get().to(getusers))
             .route("/adduser", web::post().to(adduser))
+            .route("/addfriend", web::get().to(addfriend))
             .route("/updateuser", web::get().to(updateuser))
             .route("/getuid", web::get().to(getuid))
             .route("/friendws", web::get().to(friendws))
