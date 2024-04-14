@@ -41,7 +41,7 @@ struct Location {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct Friend {
     uid: String,
-    //name: String,
+    name: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -147,6 +147,23 @@ impl Person {
         return create_data(client, p).await;
     }
     async fn update_person<F>(client: &Client, uid: String, updater: F) -> String where F: FnOnce(&mut Person), {
+        let mut person = Person::get_user(&client, uid).await;
+        updater(&mut person);
+        return create_data(client, person).await;
+    }
+    async fn add_friend(client: &Client, uid: String, friend_uid: String) -> String {
+        let friend_name = Person::get_user(&client, friend_uid.clone()).await.get_name();
+        let ret = Person::update_person(&client, uid, |person| {
+            if let Some(friends) = person.friends.as_mut() {
+                friends.push(Friend { uid: friend_uid, name: friend_name });
+            } else {
+                person.friends = Some(vec![Friend {uid:friend_uid, name: friend_name }]);
+            }
+            println!("{:?}", person)
+        }).await;
+        ret
+    }
+    async fn get_user(client: &Client, uid: String) -> Person {
         let query = r#"
             query all($a: string) {
                 all(func: uid($a)) {
@@ -189,19 +206,7 @@ impl Person {
             .await
             .expect("resp");
         let ppl: All = serde_json::from_slice::<All>(&resp.json).expect("Failed to deserialize binary data");
-        println!("{:#?}", ppl);
-        let mut person = ppl.all.first().unwrap().to_owned();
-        return create_data(client, person).await;
-    }
-    async fn add_friend(client: &Client, uid: String, friend_uid: String) -> String {
-        return Person::update_person(&client, uid, |person| {
-            if let Some(friends) = person.friends.as_mut() {
-                friends.push(Friend { uid: friend_uid });
-            } else {
-                person.friends = vec![Friend { uid: friend_uid }].into();
-            }
-            println!("{:#?}", person)
-        }).await;
+        return ppl.all.first().unwrap().to_owned();
     }
 }
 
@@ -223,6 +228,7 @@ async fn create_data<T>(client: &Client, data: T) -> String
 where
     T: serde::Serialize + std::fmt::Debug + HasUid,
 {
+    println!("{:?}", data);
     let name = data.get_name();
     let mut txn = client.new_mutated_txn();
     let mut mu = Mutation::new();
@@ -230,8 +236,8 @@ where
     let response = txn.mutate(mu).await.expect("mutated");
     txn.commit().await.expect("committed");
     
-
     println!("{:#?}, {}", response.uids, name);
+
     let id = response
         .uids
         .get(name.as_str())
@@ -262,7 +268,7 @@ async fn query_nodes(client: &Client) -> HashMap<String, String> {
                 uid
                 name
             }
-        }      
+        }
     "#;
     let resp = client
         .new_read_only_txn()
@@ -526,6 +532,7 @@ async fn getusers(req: HttpRequest) -> impl Responder {
                 }
                 friends {
                     uid
+                    name
                 }
                 misc
             }
@@ -555,6 +562,7 @@ async fn getusers(req: HttpRequest) -> impl Responder {
             }
             friends {
                 uid
+                name
             }
             misc
             }
@@ -597,6 +605,8 @@ async fn main() -> std::io::Result<()> {
     uid_map.insert("Pronsh".to_string(), x);
     let x = Person::new_node(&client, "Justin".to_owned()).await;
     uid_map.insert("Justin".to_string(), x);
+    println!("{}, {}", uid_map.get("Joshua").unwrap().to_owned(), uid_map.get("Pronsh").unwrap().to_owned());
+    Person::add_friend(&client, uid_map.get("Joshua").unwrap().to_owned(), uid_map.get("Pronsh").unwrap().to_owned()).await;
     //query_data(&client).await;
     println!("{:#?}", uid_map);
     println!("DONE!");
