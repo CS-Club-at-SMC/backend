@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix = "0.13.3"
+actix = "0.13.5"
 actix-web = { version = "4", default-features = false, features =  ["macros", "compress-brotli", "compress-gzip", "cookies", "http2"] }
 actix-web-actors = "4"
 dgraph-tonic = "0.11"
